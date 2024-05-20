@@ -2,13 +2,7 @@
 apt update
 apt install -y apache2
 
-# Install the AWS CLI
-apt install -y awscli
-
-# Download the images from S3 bucket
-#aws s3 cp s3://myterraformprojectbucket2023/project.webp /var/www/html/project.png --acl public-read
-
-# Create a simple HTML file with the portfolio content and display the images
+# Create the HTML file
 cat <<EOF > /var/www/html/index.html
 <!DOCTYPE html>
 <html lang="en">
@@ -73,9 +67,11 @@ cat <<EOF > /var/www/html/index.html
     </div>
 </body>
 </html>
-
 EOF
 
-# Start Apache and enable it on boot
-systemctl start apache2
-systemctl enable apache2
+# Adjust ownership and permissions
+chown www-data:www-data /var/www/html/index.html
+chmod 644 /var/www/html/index.html
+
+# Restart Apache to apply changes
+systemctl restart apache2

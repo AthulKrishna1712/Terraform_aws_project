@@ -4,24 +4,24 @@ resource "aws_vpc" "myvpc" {
 
 resource "aws_subnet" "sub_1" {
   vpc_id                  = aws_vpc.myvpc.id
-  availability_zone       = var.availability-zone
+  availability_zone       = "ap-south-1a"
   cidr_block              = "10.0.0.0/24"
   map_public_ip_on_launch = true
 }
 
 resource "aws_subnet" "sub_2" {
   vpc_id                  = aws_vpc.myvpc.id
-  availability_zone       = var.availability-zone
-  cidr_block              = "10.0.0.0/24"
+  availability_zone       = "ap-south-1b"
+  cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
 }
 
 resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.myvpc
+  vpc_id = aws_vpc.myvpc.id
 }
 
 resource "aws_route_table" "rt" {
-  vpc_id = aws_vpc.myvpc
+  vpc_id = aws_vpc.myvpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -30,13 +30,13 @@ resource "aws_route_table" "rt" {
 }
 
 resource "aws_route_table_association" "rta1" {
-  subnet_id      = aws_subnet.sub_1
-  route_table_id = aws_route_table.rt
+  subnet_id      = aws_subnet.sub_1.id
+  route_table_id = aws_route_table.rt.id
 }
 
 resource "aws_route_table_association" "rta2" {
-  subnet_id      = aws_subnet.sub_1.id
-  route_table_id = aws_route_table.rt
+  subnet_id      = aws_subnet.sub_2.id
+  route_table_id = aws_route_table.rt.id
 }
 
 resource "aws_security_group" "sg" {
@@ -57,6 +57,12 @@ resource "aws_security_group" "sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = {
     Name = "web_sg"
@@ -64,7 +70,7 @@ resource "aws_security_group" "sg" {
 }
 
 resource "aws_s3_bucket" "my_s3" {
-  bucket = "athulterraform2024"
+  bucket = var.s3_name
 }
 
 
@@ -112,9 +118,9 @@ resource "aws_s3_bucket_acl" "s3_acl" {
 resource "aws_instance" "webserver1" {
   ami                    = "ami-0f58b397bc5c1f2e8"
   instance_type          = "t2.micro"
-  vpc_security_group_ids = [aws_security_group.sg.vpc_id]
+  vpc_security_group_ids = [aws_security_group.sg.id]
   subnet_id              = aws_subnet.sub_1.id
-  user_data              = base64decode(file("userdata1.sh"))
+  user_data              = file("userdata1.sh")
 
   tags = {
     Name = "webserver1"
@@ -124,9 +130,9 @@ resource "aws_instance" "webserver1" {
 resource "aws_instance" "webserver2" {
   ami                    = "ami-0f58b397bc5c1f2e8"
   instance_type          = "t2.micro"
-  vpc_security_group_ids = [aws_security_group.sg.vpc_id]
+  vpc_security_group_ids = [aws_security_group.sg.id]
   subnet_id              = aws_subnet.sub_2.id
-  user_data              = base64decode(file("userdata2.sh"))
+  user_data              = file("userdata2.sh")
 
   tags = {
     Name = "webserver2"
@@ -138,7 +144,7 @@ resource "aws_lb" "alb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.sg.id]
-  subnets            = [aws_subnet.sub_1, aws_subnet.sub_2]
+  subnets            = [aws_subnet.sub_1.id, aws_subnet.sub_2.id]
 
   tags = {
     Name = "My_alb"
@@ -170,9 +176,9 @@ resource "aws_lb_target_group_attachment" "tg_attach2" {
 }
 
 resource "aws_lb_listener" "front_end" {
-  load_balancer_arn = aws_lb.alb.id
+  load_balancer_arn = aws_lb.alb.arn
   port              = 80
-  protocol          = "HTTPS"
+  protocol          = "HTTP"
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.tg.arn
@@ -181,4 +187,16 @@ resource "aws_lb_listener" "front_end" {
 
 output "loadbalancerdns" {
   value = aws_lb.alb.dns_name
+}
+
+resource "aws_dynamodb_table" "terraform_lock" {
+  name             = "terraform-lock"
+  hash_key         = "LockID"
+  billing_mode     = "PAY_PER_REQUEST"
+
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
 }
